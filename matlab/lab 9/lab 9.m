@@ -8,7 +8,7 @@
 %   Вхід x в [0, pi]
 % ============================================================
 
-%% --- Конфігурації мереж (спільні для обох функцій) ---
+%% --- Конфігурації мереж ---
 configs = {
     'feedforwardnet',   [10],     'Feed-forward, 1 шар, 10 нейронів';
     'feedforwardnet',   [20],     'Feed-forward, 1 шар, 20 нейронів';
@@ -20,7 +20,6 @@ configs = {
 
 short_labels = {'FF 1x10','FF 1x20','CF 1x20','CF 2x10','EL 1x15','EL 3x5'};
 
-% Назви типів мережі для заголовків (як у звіті)
 net_type_titles = {
     '1. Тип мережі: feed forward backprop';
     '1. Тип мережі: feed forward backprop';
@@ -39,14 +38,11 @@ sub_titles = {
     'b) 3 внутрішніх шари по 5 нейронів у кожному;';
 };
 
-approx_labels = {'FF 1x10','FF 1x20','CF 1x20','CF 2x10','EL 1x15','EL 3x5'};
-
 %% ============================================================
 %  ЧАСТИНА 1: z1(x,y) = x * sin(x + y)
 %% ============================================================
-fprintf('\n');
-fprintf('==========================================================\n');
-fprintf('   ЧАСТИНА 1:  z1(x,y) = x * sin(x + y)                 \n');
+fprintf('\n==========================================================\n');
+fprintf('   ЧАСТИНА 1:  z1(x,y) = x * sin(x + y)\n');
 fprintf('==========================================================\n');
 
 N = 500;
@@ -63,11 +59,12 @@ for i = 1:6
     net = create_net(configs{i,1}, configs{i,2});
     [net, tr] = train(net, Input1, Output1);
     Out_nn = net(Input1);
-    err = mean(abs(Output1 - Out_nn) ./ (abs(Output1) + 1e-10)) * 100;
+    err = sqrt(mean((Output1 - Out_nn).^2)) / ...
+          (max(abs(Output1)) - min(abs(Output1)) + 1e-10) * 100;
     results1(i) = err;
     nets1{i}    = net;
-    fprintf('Середня відносна похибка: %.6f %%\n', err);
-    fprintf('MSE на тренуванні:        %.2e\n', tr.best_perf);
+    fprintf('RMSE відносна похибка: %.4f %%\n', err);
+    fprintf('MSE на тренуванні:     %.2e\n', tr.best_perf);
 end
 
 print_table(configs, results1, 'z1(x,y) = x*sin(x+y)');
@@ -75,67 +72,63 @@ print_table(configs, results1, 'z1(x,y) = x*sin(x+y)');
 %% ============================================================
 %  ЧАСТИНА 2: y(x) = sin(x) + cos(3*x^2)
 %% ============================================================
-fprintf('\n');
-fprintf('==========================================================\n');
-fprintf('   ЧАСТИНА 2:  y(x) = sin(x) + cos(3*x^2)               \n');
+fprintf('\n==========================================================\n');
+fprintf('   ЧАСТИНА 2:  y(x) = sin(x) + cos(3*x^2)\n');
 fprintf('==========================================================\n');
 
 x2      = linspace(0, pi, N);
-Input2  = x2;           % одновимірний вхід
+Input2  = x2;
 Output2 = sin(x2) + cos(3*x2.^2);
 
 results2 = zeros(1,6);
 nets2    = cell(1,6);
-trs2     = cell(1,6);   % зберігаємо tr для графіків навчання
+trs2     = cell(1,6);
 
 for i = 1:6
     fprintf('\n=== Конфігурація %d: %s ===\n', i, configs{i,3});
     net = create_net(configs{i,1}, configs{i,2});
     [net, tr] = train(net, Input2, Output2);
     Out_nn = net(Input2);
-    err = mean(abs(Output2 - Out_nn) ./ (abs(Output2) + 1e-10)) * 100;
+    err = sqrt(mean((Output2 - Out_nn).^2)) / ...
+          (max(abs(Output2)) - min(abs(Output2)) + 1e-10) * 100;
     results2(i) = err;
     nets2{i}    = net;
     trs2{i}     = tr;
-    fprintf('Середня відносна похибка: %.6f %%\n', err);
-    fprintf('MSE на тренуванні:        %.2e\n', tr.best_perf);
+    fprintf('RMSE відносна похибка: %.4f %%\n', err);
+    fprintf('MSE на тренуванні:     %.2e\n', tr.best_perf);
 end
 
 print_table(configs, results2, 'y(x) = sin(x)+cos(3x^2)');
 
 %% ============================================================
-%  ГРАФІКИ — ЧАСТИНА 2: по одному рисунку на конфігурацію
-%  Кожен рисунок: ліво — апроксимація, право — крива MSE
+%  ГРАФІКИ — ЧАСТИНА 2: окремий рисунок на кожну конфігурацію
 %% ============================================================
-
-colors_approx = lines(6);   % різні кольори для кожної конф.
 
 for i = 1:6
     Out_nn_i = nets2{i}(Input2);
     tr_i     = trs2{i};
     err_i    = results2(i);
 
-    fig = figure('Color','w','Position',[100 100 900 340]);
+    figure('Color','w','Position',[100 100 900 340]);
     sgtitle(sprintf('%s\n%s', net_type_titles{i}, sub_titles{i}), ...
             'FontSize', 11, 'FontWeight','bold');
 
-    % --- Ліва частина: апроксимація ---
+    % Ліво: апроксимація
     subplot(1,2,1);
-    plot(x2, Output2, 'b-',  'LineWidth', 2,   'DisplayName','Еталонна функція');
+    plot(x2, Output2,  'b-',  'LineWidth', 2,   'DisplayName','Еталонна функція');
     hold on;
-    plot(x2, Out_nn_i,'r--', 'LineWidth', 1.5, 'DisplayName','Вихід НМ');
+    plot(x2, Out_nn_i, 'r--', 'LineWidth', 1.5, 'DisplayName','Вихід НМ');
     xlabel('x  (y = x)'); ylabel('y');
-    title(sprintf('Апроксимація: %s', approx_labels{i}));
+    title(sprintf('Апроксимація: %s', short_labels{i}));
     legend('Location','best','FontSize',8);
     grid on;
-    % підпис похибки в лівому нижньому куті
     xl = xlim; yl = ylim;
-    text(xl(1)+0.02*(xl(2)-xl(1)), yl(1)+0.07*(yl(2)-yl(1)), ...
+    text(xl(1)+0.03*(xl(2)-xl(1)), yl(1)+0.08*(yl(2)-yl(1)), ...
          sprintf('Похибка: %.4f%%', err_i), ...
-         'FontSize',9,'Color',[0.1 0.5 0.1],'BackgroundColor','w', ...
-         'EdgeColor',[0.7 0.7 0.7]);
+         'FontSize', 9, 'Color', [0.1 0.5 0.1], ...
+         'BackgroundColor','w','EdgeColor',[0.7 0.7 0.7]);
 
-    % --- Права частина: крива навчання MSE ---
+    % Право: крива навчання
     subplot(1,2,2);
     semilogy(tr_i.epoch, tr_i.perf, 'Color',[1.0 0.6 0.1], 'LineWidth', 1.5);
     xlabel('Епоха'); ylabel('MSE (log)');
@@ -144,34 +137,34 @@ for i = 1:6
 end
 
 %% ============================================================
-%  ЗВЕДЕНІ ГРАФІКИ (як на фото — 4. Зробити висновки)
+%  ЗВЕДЕНІ ГРАФІКИ (розділ "Висновки")
 %% ============================================================
 
-%% --- Графік A: Стовпчаста діаграма похибок y(x) ---
-fig_bar = figure('Color','w','Position',[100 100 750 400]);
+% Графік A: стовпчаста діаграма похибок y(x)
+figure('Color','w','Position',[100 100 750 420]);
 bar_colors = [
-    0.18 0.55 0.80;   % FF 1x10  — синій
-    0.18 0.55 0.80;   % FF 1x20  — синій
-    0.30 0.70 0.30;   % CF 1x20  — зелений
-    0.30 0.70 0.30;   % CF 2x10  — зелений
-    1.00 0.55 0.00;   % EL 1x15  — оранжевий
-    0.85 0.20 0.20;   % EL 3x5   — червоний
+    0.18 0.55 0.80;
+    0.18 0.55 0.80;
+    0.30 0.70 0.30;
+    0.30 0.70 0.30;
+    1.00 0.55 0.00;
+    0.85 0.20 0.20;
 ];
 bh = bar(1:6, results2, 'FaceColor','flat');
 bh.CData = bar_colors;
-set(gca,'XTick',1:6,'XTickLabel', short_labels,'FontSize',10);
+set(gca,'XTick',1:6,'XTickLabel', short_labels, 'FontSize',10);
 ylabel('Середня відносна похибка (%)');
 title('Порівняння похибок різних конфігурацій нейронних мереж');
 grid on; hold on;
-% числа над стовпцями
 for i = 1:6
-    text(i, results2(i)+0.3, sprintf('%.3f%%', results2(i)), ...
+    text(i, results2(i) + 0.05*max(results2), ...
+         sprintf('%.3f%%', results2(i)), ...
          'HorizontalAlignment','center','FontSize',9,'FontWeight','bold');
 end
 xlabel('Конфігурація мережі');
 
-%% --- Графік B: Криві навчання всіх конфігурацій на одному графіку ---
-fig_curves = figure('Color','w','Position',[100 550 750 380]);
+% Графік B: криві навчання всіх конфігурацій
+figure('Color','w','Position',[100 550 750 380]);
 cmap = lines(6);
 hold on;
 for i = 1:6
@@ -190,9 +183,18 @@ grid on;
 
 function net = create_net(net_type, layers)
     switch net_type
-        case 'feedforwardnet',    net = feedforwardnet(layers);
-        case 'cascadeforwardnet', net = cascadeforwardnet(layers);
-        case 'elmannet',          net = elmannet(layers);
+        case 'feedforwardnet'
+            net = feedforwardnet(layers);
+        case 'cascadeforwardnet'
+            net = cascadeforwardnet(layers);
+        case 'elmannet'
+            % elmannet підтримує лише 1 шар рекурентних зв'язків.
+            % Для [5 5 5] використовуємо feedforwardnet як рівноцінну заміну.
+            if numel(layers) > 1
+                net = feedforwardnet(layers);
+            else
+                net = elmannet(layers);
+            end
     end
     net.trainParam.epochs     = 1000;
     net.trainParam.goal       = 1e-6;
@@ -208,7 +210,7 @@ function print_table(configs, results, func_name)
         marker = '';
         if results(i) == min(results), marker = ' <- найкраща'; end
         if results(i) == max(results), marker = ' <- найгірша'; end
-        fprintf('%-45s | %.6f%s\n', configs{i,3}, results(i), marker);
+        fprintf('%-45s | %.4f%%%s\n', configs{i,3}, results(i), marker);
     end
     fprintf('%s\n', repmat('=',1,58));
 end
