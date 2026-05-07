@@ -20,6 +20,27 @@ configs = {
 
 short_labels = {'FF 1x10','FF 1x20','CF 1x20','CF 2x10','EL 1x15','EL 3x5'};
 
+% Назви типів мережі для заголовків (як у звіті)
+net_type_titles = {
+    '1. Тип мережі: feed forward backprop';
+    '1. Тип мережі: feed forward backprop';
+    '2. Тип мережі: cascade - forward backprop';
+    '2. Тип мережі: cascade - forward backprop';
+    '3. Тип мережі: elman backprop';
+    '3. Тип мережі: elman backprop';
+};
+
+sub_titles = {
+    'a) 1 внутрішній шар з 10 нейронами;';
+    'b) 1 внутрішній шар з 20 нейронами;';
+    'a) 1 внутрішній шар з 20 нейронами;';
+    'b) 2 внутрішніх шари по 10 нейронів у кожному;';
+    'a) 1 внутрішній шар з 15 нейронами;';
+    'b) 3 внутрішніх шари по 5 нейронів у кожному;';
+};
+
+approx_labels = {'FF 1x10','FF 1x20','CF 1x20','CF 2x10','EL 1x15','EL 3x5'};
+
 %% ============================================================
 %  ЧАСТИНА 1: z1(x,y) = x * sin(x + y)
 %% ============================================================
@@ -59,13 +80,13 @@ fprintf('==========================================================\n');
 fprintf('   ЧАСТИНА 2:  y(x) = sin(x) + cos(3*x^2)               \n');
 fprintf('==========================================================\n');
 
-x2 = linspace(0, pi, N);
-y2 = zeros(1, N);          % фіктивний другий вхід
-Input2  = [x2; y2];
+x2      = linspace(0, pi, N);
+Input2  = x2;           % одновимірний вхід
 Output2 = sin(x2) + cos(3*x2.^2);
 
 results2 = zeros(1,6);
 nets2    = cell(1,6);
+trs2     = cell(1,6);   % зберігаємо tr для графіків навчання
 
 for i = 1:6
     fprintf('\n=== Конфігурація %d: %s ===\n', i, configs{i,3});
@@ -75,6 +96,7 @@ for i = 1:6
     err = mean(abs(Output2 - Out_nn) ./ (abs(Output2) + 1e-10)) * 100;
     results2(i) = err;
     nets2{i}    = net;
+    trs2{i}     = tr;
     fprintf('Середня відносна похибка: %.6f %%\n', err);
     fprintf('MSE на тренуванні:        %.2e\n', tr.best_perf);
 end
@@ -82,67 +104,85 @@ end
 print_table(configs, results2, 'y(x) = sin(x)+cos(3x^2)');
 
 %% ============================================================
-%  ГРАФІКИ
+%  ГРАФІКИ — ЧАСТИНА 2: по одному рисунку на конфігурацію
+%  Кожен рисунок: ліво — апроксимація, право — крива MSE
 %% ============================================================
 
-%% --- Графік 1: Порівняння похибок (обидві функції) ---
-figure('Name','Порівняння похибок — Варіант 5','Color','w','Position',[50 50 800 420]);
-xb = 1:6; wb = 0.35;
-b1 = bar(xb-wb/2, results1, wb, 'FaceColor','flat');
-b1.CData = repmat([0.18 0.55 0.80], 6, 1);
-hold on;
-b2 = bar(xb+wb/2, results2, wb, 'FaceColor','flat', 'FaceAlpha', 0.7);
-b2.CData = repmat([0.85 0.33 0.10], 6, 1);
-set(gca,'XTickLabel', short_labels, 'FontSize', 10);
-legend({'z1(x,y) = x*sin(x+y)', 'y(x) = sin(x)+cos(3x^2)'}, 'Location','NorthWest');
+colors_approx = lines(6);   % різні кольори для кожної конф.
+
+for i = 1:6
+    Out_nn_i = nets2{i}(Input2);
+    tr_i     = trs2{i};
+    err_i    = results2(i);
+
+    fig = figure('Color','w','Position',[100 100 900 340]);
+    sgtitle(sprintf('%s\n%s', net_type_titles{i}, sub_titles{i}), ...
+            'FontSize', 11, 'FontWeight','bold');
+
+    % --- Ліва частина: апроксимація ---
+    subplot(1,2,1);
+    plot(x2, Output2, 'b-',  'LineWidth', 2,   'DisplayName','Еталонна функція');
+    hold on;
+    plot(x2, Out_nn_i,'r--', 'LineWidth', 1.5, 'DisplayName','Вихід НМ');
+    xlabel('x  (y = x)'); ylabel('y');
+    title(sprintf('Апроксимація: %s', approx_labels{i}));
+    legend('Location','best','FontSize',8);
+    grid on;
+    % підпис похибки в лівому нижньому куті
+    xl = xlim; yl = ylim;
+    text(xl(1)+0.02*(xl(2)-xl(1)), yl(1)+0.07*(yl(2)-yl(1)), ...
+         sprintf('Похибка: %.4f%%', err_i), ...
+         'FontSize',9,'Color',[0.1 0.5 0.1],'BackgroundColor','w', ...
+         'EdgeColor',[0.7 0.7 0.7]);
+
+    % --- Права частина: крива навчання MSE ---
+    subplot(1,2,2);
+    semilogy(tr_i.epoch, tr_i.perf, 'Color',[1.0 0.6 0.1], 'LineWidth', 1.5);
+    xlabel('Епоха'); ylabel('MSE (log)');
+    title('Графік навчання (MSE)');
+    grid on;
+end
+
+%% ============================================================
+%  ЗВЕДЕНІ ГРАФІКИ (як на фото — 4. Зробити висновки)
+%% ============================================================
+
+%% --- Графік A: Стовпчаста діаграма похибок y(x) ---
+fig_bar = figure('Color','w','Position',[100 100 750 400]);
+bar_colors = [
+    0.18 0.55 0.80;   % FF 1x10  — синій
+    0.18 0.55 0.80;   % FF 1x20  — синій
+    0.30 0.70 0.30;   % CF 1x20  — зелений
+    0.30 0.70 0.30;   % CF 2x10  — зелений
+    1.00 0.55 0.00;   % EL 1x15  — оранжевий
+    0.85 0.20 0.20;   % EL 3x5   — червоний
+];
+bh = bar(1:6, results2, 'FaceColor','flat');
+bh.CData = bar_colors;
+set(gca,'XTick',1:6,'XTickLabel', short_labels,'FontSize',10);
 ylabel('Середня відносна похибка (%)');
-title('Варіант 5 — Порівняння похибок конфігурацій НМ');
+title('Порівняння похибок різних конфігурацій нейронних мереж');
+grid on; hold on;
+% числа над стовпцями
+for i = 1:6
+    text(i, results2(i)+0.3, sprintf('%.3f%%', results2(i)), ...
+         'HorizontalAlignment','center','FontSize',9,'FontWeight','bold');
+end
+xlabel('Конфігурація мережі');
+
+%% --- Графік B: Криві навчання всіх конфігурацій на одному графіку ---
+fig_curves = figure('Color','w','Position',[100 550 750 380]);
+cmap = lines(6);
+hold on;
+for i = 1:6
+    semilogy(trs2{i}.epoch, trs2{i}.perf, ...
+             'Color', cmap(i,:), 'LineWidth', 1.5, ...
+             'DisplayName', short_labels{i});
+end
+xlabel('Епоха'); ylabel('MSE (log scale)');
+title('Криві навчання всіх конфігурацій нейронних мереж');
+legend('Location','NorthEast','FontSize',9);
 grid on;
-
-%% --- Графік 2: Апроксимація z1 (краща конфігурація) ---
-[~, best1] = min(results1);
-Out_best1  = nets1{best1}(Input1);
-
-figure('Name','Апроксимація z1 — Варіант 5','Color','w','Position',[50 520 700 350]);
-plot(x1, Output1,   'b-',  'LineWidth', 2,   'DisplayName','Еталон z1');
-hold on;
-plot(x1, Out_best1, 'r--', 'LineWidth', 1.5, 'DisplayName',['НМ: ',configs{best1,3}]);
-xlabel('x  (y = x)'); ylabel('z1'); grid on;
-title(sprintf('z1(x,y)=x*sin(x+y) — краща НМ: %s (%.4f%%)', ...
-    configs{best1,3}, results1(best1)));
-legend('Location','best');
-
-%% --- Графік 3: 3D-поверхня z1 (еталон vs НМ) ---
-Ng = 30;
-xg = linspace(0, pi/2, Ng);
-yg = linspace(0, pi/2, Ng);
-[Xg,Yg] = meshgrid(xg, yg);
-Zg_true = Xg .* sin(Xg + Yg);
-Zg_nn   = reshape(nets1{best1}([Xg(:)'; Yg(:)']), Ng, Ng);
-
-figure('Name','3D z1 — Варіант 5','Color','w','Position',[800 50 1000 420]);
-subplot(1,2,1);
-surf(Xg,Yg,Zg_true,'EdgeColor','none'); colormap(gca,'parula'); colorbar;
-xlabel('x'); ylabel('y'); zlabel('z1'); grid on;
-title('Еталон  z1 = x*sin(x+y)');
-subplot(1,2,2);
-surf(Xg,Yg,Zg_nn,'EdgeColor','none'); colormap(gca,'parula'); colorbar;
-xlabel('x'); ylabel('y'); zlabel('z1 НМ'); grid on;
-title(sprintf('НМ: %s', short_labels{best1}));
-sgtitle('Варіант 5 — z1(x,y) = x*sin(x+y)', 'FontSize',13);
-
-%% --- Графік 4: Апроксимація y(x) (краща конфігурація) ---
-[~, best2] = min(results2);
-Out_best2  = nets2{best2}(Input2);
-
-figure('Name','Апроксимація y(x) — Варіант 5','Color','w','Position',[800 520 700 350]);
-plot(x2, Output2,   'b-',  'LineWidth', 2,   'DisplayName','Еталон y(x)');
-hold on;
-plot(x2, Out_best2, 'r--', 'LineWidth', 1.5, 'DisplayName',['НМ: ',configs{best2,3}]);
-xlabel('x'); ylabel('y'); grid on;
-title(sprintf('y(x)=sin(x)+cos(3x^2) — краща НМ: %s (%.4f%%)', ...
-    configs{best2,3}, results2(best2)));
-legend('Location','best');
 
 %% ============================================================
 %  ДОПОМІЖНІ ФУНКЦІЇ
